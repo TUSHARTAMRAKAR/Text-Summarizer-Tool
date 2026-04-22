@@ -121,7 +121,12 @@ async function summarize() {
     const data = await response.json();
 
     if (!data.success) {
-      showError(data.error || "Summarization failed. Please try again.");
+      // ── Special handling for abstractive-not-available error ──
+      if (data.suggestion === "extractive") {
+        showFreeTierError(data.error);
+      } else {
+        showError(data.error || "Summarization failed. Please try again.");
+      }
       return;
     }
 
@@ -167,6 +172,35 @@ function displayResult(data) {
   copyBtn.style.display = "inline-flex";
 }
 
+// ── Free Tier Error (Abstractive unavailable) ─────────────────────────────────
+function showFreeTierError(msg) {
+  // Format the multi-line message nicely
+  errorMsg.innerHTML = msg
+    .split("\n\n")
+    .map(line => `<p>${line}</p>`)
+    .join("");
+
+  // Add a "Switch to Extractive" button inside the error
+  const switchBtn = document.createElement("button");
+  switchBtn.textContent = "Switch to Extractive →";
+  switchBtn.className = "switch-btn";
+  switchBtn.onclick = () => {
+    // Switch the toggle to extractive
+    const methodGroup = document.getElementById("methodToggle");
+    methodGroup.querySelectorAll(".toggle-btn").forEach(b => {
+      b.classList.remove("active");
+      if (b.dataset.value === "extractive") b.classList.add("active");
+    });
+    selectedMethod = "extractive";
+    showState("empty");
+    // Auto-summarize with extractive
+    summarize();
+  };
+
+  errorMsg.appendChild(switchBtn);
+  showState("error");
+}
+
 // ── Copy to Clipboard ─────────────────────────────────────────────────────────
 copyBtn.addEventListener("click", async () => {
   const text = summaryText.textContent;
@@ -191,7 +225,7 @@ function showState(state) {
 }
 
 function showError(msg) {
-  errorMsg.textContent = msg;
+  errorMsg.innerHTML = `<p>${msg}</p>`;
   showState("error");
 }
 

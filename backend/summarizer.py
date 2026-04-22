@@ -3,9 +3,13 @@ summarizer.py — Core NLP Summarization Engine
 Supports two methods:
   1. Abstractive  — HuggingFace BART model (rewrites in its own words)
   2. Extractive   — TF-IDF + sentence scoring (picks best original sentences)
+
+Note: Abstractive mode requires ~2GB RAM. On free hosting (Render free tier),
+      only extractive mode is available. Abstractive works fine when running locally.
 """
 
 import re
+import os
 import math
 import logging
 from typing import Optional
@@ -25,12 +29,20 @@ class TextSummarizer:
     Unified text summarizer supporting:
       - Abstractive summarization via facebook/bart-large-cnn
       - Extractive summarization via TF-IDF sentence scoring
+
+    On memory-constrained environments (e.g. Render free tier),
+    abstractive mode is gracefully disabled and the user is informed.
     """
 
     def __init__(self):
         self._pipeline = None
         self._model_name = "facebook/bart-large-cnn"
-        self._load_model()
+        self._low_memory = os.environ.get("LOW_MEMORY", "false").lower() == "true"
+
+        if self._low_memory:
+            logger.info("LOW_MEMORY mode enabled — running in extractive-only mode.")
+        else:
+            self._load_model()
 
     # ── Model Loading ──────────────────────────────────────────────────────────
     def _load_model(self):
@@ -53,6 +65,10 @@ class TextSummarizer:
         """Return True if the abstractive model is available."""
         return self._pipeline is not None
 
+    def is_low_memory(self) -> bool:
+        """Return True if running in low memory / free tier mode."""
+        return self._low_memory
+
     # ── Public API ─────────────────────────────────────────────────────────────
     def summarize(self, text: str, length: str = "medium", method: str = "abstractive") -> dict:
         """
@@ -68,6 +84,33 @@ class TextSummarizer:
         """
         length = length if length in LENGTH_CONFIG else "medium"
 
+        # ── Abstractive requested but unavailable (free tier) ──────────────────
+        if method == "abstractive" and self._low_memory:
+            return {
+                "success": False,
+                "error": (
+                    "⚠️ Abstractive summarization is not available on the free hosted version — "
+                    "it requires ~2GB RAM which exceeds the free tier limit.\n\n"
+                    "✅ Please switch to Extractive mode — it works fully on this server "
+                    "and gives great results!\n\n"
+                    "💻 To use Abstractive mode, clone the repo and run it locally on your machine."
+                ),
+                "suggestion": "extractive"
+            }
+
+        # ── Abstractive requested but model failed to load ─────────────────────
+        if method == "abstractive" and self._pipeline is None:
+            return {
+                "success": False,
+                "error": (
+                    "⚠️ Abstractive summarization is currently unavailable — "
+                    "the AI model could not be loaded.\n\n"
+                    "✅ Please switch to Extractive mode which works great!"
+                ),
+                "suggestion": "extractive"
+            }
+
+        # ── Run summarization ──────────────────────────────────────────────────
         if method == "abstractive" and self._pipeline is not None:
             summary = self._abstractive(text, length)
             method_used = "abstractive"
@@ -92,8 +135,6 @@ class TextSummarizer:
     def _abstractive(self, text: str, length: str) -> str:
         """Use BART to generate an abstractive summary."""
         cfg = LENGTH_CONFIG[length]
-
-        # BART has a 1024-token input limit — chunk if necessary
         chunks = self._chunk_text(text, max_chars=3000)
         summaries = []
 
@@ -118,7 +159,6 @@ class TextSummarizer:
 
         combined = " ".join(summaries)
 
-        # If multiple chunks, do a second-pass summary
         if len(chunks) > 1 and len(combined.split()) > cfg["max_tokens"]:
             try:
                 result = self._pipeline(
@@ -144,7 +184,6 @@ class TextSummarizer:
         if len(sentences) <= 3:
             return text.strip()
 
-        # Build word frequency table (TF)
         words = re.findall(r'\b[a-z]{3,}\b', text.lower())
         stop_words = self._stop_words()
         word_freq = {}
@@ -152,20 +191,16 @@ class TextSummarizer:
             if w not in stop_words:
                 word_freq[w] = word_freq.get(w, 0) + 1
 
-        # Normalize frequencies
         max_freq = max(word_freq.values(), default=1)
         word_freq = {w: f / max_freq for w, f in word_freq.items()}
 
-        # Score each sentence
         sentence_scores = {}
         for i, sent in enumerate(sentences):
             sent_words = re.findall(r'\b[a-z]{3,}\b', sent.lower())
             score = sum(word_freq.get(w, 0) for w in sent_words)
-            # Slight boost for early sentences (they're often topic sentences)
             position_boost = 1.2 if i < 3 else 1.0
             sentence_scores[i] = score * position_boost
 
-        # Pick top N sentences
         n = max(2, math.ceil(len(sentences) * ratio))
         top_indices = sorted(
             sorted(sentence_scores, key=sentence_scores.get, reverse=True)[:n]
@@ -176,7 +211,6 @@ class TextSummarizer:
 
     # ── Helpers ────────────────────────────────────────────────────────────────
     def _chunk_text(self, text: str, max_chars: int = 3000) -> list:
-        """Split text into chunks that respect paragraph boundaries."""
         paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
         chunks, current = [], ""
 
@@ -194,7 +228,6 @@ class TextSummarizer:
         return chunks if chunks else [text]
 
     def _split_sentences(self, text: str) -> list:
-        """Basic sentence splitter."""
         text = re.sub(r'\s+', ' ', text)
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if len(s.strip()) > 20]
