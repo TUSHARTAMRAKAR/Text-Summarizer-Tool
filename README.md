@@ -79,7 +79,7 @@ This was built as a beginner-to-intermediate learning project to understand NLP 
 
 > 🚀 The app is deployed and accessible here:
 
-**[https://your-app.onrender.com](https://your-app.onrender.com)**
+**[https://summari-84uc.onrender.com](https://summari-84uc.onrender.com)**
 
 > ⚠️ Note: The app runs on Render's free tier — it may take 30–60 seconds to wake up on first visit.
 
