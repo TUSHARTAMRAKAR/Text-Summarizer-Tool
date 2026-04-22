@@ -2,10 +2,11 @@
 flask==3.0.0
 flask-cors==4.0.0
 
-# NLP / AI
+# NLP / AI — versions compatible with Python 3.11
 transformers==4.35.2
-torch
-sentencepiece==0.2.0
+torch==2.1.0
+tokenizers==0.15.0
+sentencepiece==0.1.99
 
 # Testing
 pytest==7.4.0
