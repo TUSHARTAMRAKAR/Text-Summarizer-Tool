@@ -10,21 +10,7 @@
 
 ---
 
-## 📸 Preview
 
-```
-┌─────────────────────────────────────────┐
-│  ◈ SummarAI                             │
-├─────────────────┬────────┬──────────────┤
-│                 │        │              │
-│  01 INPUT TEXT  │  SUM-  │  02 SUMMARY  │
-│                 │  MAR-  │              │
-│  Paste your     │  IZE   │  Your con-   │
-│  article here…  │   ⟶    │  cise summ-  │
-│                 │        │  ary appears │
-└─────────────────┴────────┴──────────────┘
-│ Original: 500 words │ Summary: 82 words │ Reduced by: 84% │
-```
 
 ---
 
